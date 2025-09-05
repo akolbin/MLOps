@@ -40,11 +40,22 @@ if __name__ == "__main__":
     # Generate data
     train_df, test_df = generate_synthetic_data()
     
-    # Get bucket name from environment or Terraform output
+    # Debug: Print all environment variables containing S3 or BUCKET
+    print("Environment variables:")
+    for key, value in os.environ.items():
+        if 'S3' in key or 'BUCKET' in key:
+            print(f"{key}={value}")
+    
+    # Get bucket name from environment
     bucket_name = os.environ.get('S3_BUCKET_NAME')
     if not bucket_name:
-        print("Please set S3_BUCKET_NAME environment variable")
+        print("S3_BUCKET_NAME environment variable not found")
+        print("Available environment variables:")
+        for key in sorted(os.environ.keys()):
+            print(f"  {key}")
         exit(1)
+    
+    print(f"Using bucket: {bucket_name}")
     
     # Upload to S3
     upload_to_s3(train_df, bucket_name, 'data/train.csv')
