@@ -35,7 +35,7 @@ class ModelDeployer:
             role=self.role_arn,
             entry_point='inference.py',
             source_dir='src/inference',
-            framework_version='1.2-1',
+            framework_version='0.23-1',
             py_version='py3'
         )
         
