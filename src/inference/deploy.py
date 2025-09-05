@@ -22,8 +22,9 @@ class ModelDeployer:
         # Check if endpoint exists
         try:
             sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
-            print(f"Endpoint {endpoint_name} exists, updating with new model...")
-            return self._update_endpoint(model_s3_path, endpoint_name)
+            print(f"Endpoint {endpoint_name} exists, deleting and recreating...")
+            self._delete_endpoint(endpoint_name)
+            return self._create_endpoint(model_s3_path, endpoint_name)
         except sagemaker_client.exceptions.ClientError:
             print(f"Creating new endpoint {endpoint_name}...")
             return self._create_endpoint(model_s3_path, endpoint_name)
@@ -52,30 +53,21 @@ class ModelDeployer:
         print(f"Model deployed to new endpoint: {predictor.endpoint_name}")
         return predictor
     
-    def _update_endpoint(self, model_s3_path, endpoint_name):
-        """Update existing endpoint with new model"""
-        sklearn_model = SKLearnModel(
-            model_data=model_s3_path,
-            role=self.role_arn,
-            entry_point='inference.py',
-            source_dir='src/inference',
-            framework_version='1.2-1',
-            py_version='py3'
-        )
+    def _delete_endpoint(self, endpoint_name):
+        """Delete existing endpoint and its configuration"""
+        sagemaker_client = boto3.client('sagemaker')
         
-        serverless_config = ServerlessInferenceConfig(
-            memory_size_in_mb=2048,
-            max_concurrency=1
-        )
-        
-        predictor = sklearn_model.deploy(
-            serverless_inference_config=serverless_config,
-            endpoint_name=endpoint_name,
-            update_endpoint=True
-        )
-        
-        print(f"Model updated on existing endpoint: {predictor.endpoint_name}")
-        return predictor
+        try:
+            # Delete endpoint
+            sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
+            print(f"Deleted endpoint: {endpoint_name}")
+            
+            # Wait for deletion to complete
+            waiter = sagemaker_client.get_waiter('endpoint_deleted')
+            waiter.wait(EndpointName=endpoint_name)
+            
+        except Exception as e:
+            print(f"Error deleting endpoint: {e}")
     
     def test_endpoint(self, endpoint_name, test_data):
         """Test the deployed endpoint"""
