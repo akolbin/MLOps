@@ -16,18 +16,17 @@ class ModelDeployer:
         if not model_s3_path:
             model_s3_path = f's3://{self.bucket_name}/models/model.tar.gz'
         
-        endpoint_name = 'mlops-showcase-endpoint'
+        endpoint_prefix = 'mlops-showcase-endpoint'
         sagemaker_client = boto3.client('sagemaker')
         
-        # Check if endpoint exists
-        try:
-            sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
-            print(f"Endpoint {endpoint_name} exists, deleting and recreating...")
-            self._delete_endpoint(endpoint_name)
-            return self._create_endpoint(model_s3_path, endpoint_name)
-        except sagemaker_client.exceptions.ClientError:
-            print(f"Creating new endpoint {endpoint_name}...")
-            return self._create_endpoint(model_s3_path, endpoint_name)
+        # Delete any existing endpoints with our prefix
+        self._cleanup_existing_endpoints(endpoint_prefix)
+        
+        # Create new endpoint with UUID
+        import uuid
+        endpoint_name = f"{endpoint_prefix}-{str(uuid.uuid4())[:8]}"
+        print(f"Creating new endpoint {endpoint_name}...")
+        return self._create_endpoint(model_s3_path, endpoint_name)
     
     def _create_endpoint(self, model_s3_path, endpoint_name):
         """Create new endpoint"""
@@ -52,6 +51,28 @@ class ModelDeployer:
         
         print(f"Model deployed to new endpoint: {predictor.endpoint_name}")
         return predictor
+    
+    def _cleanup_existing_endpoints(self, endpoint_prefix):
+        """Delete all endpoints matching the prefix"""
+        sagemaker_client = boto3.client('sagemaker')
+        
+        try:
+            # List all endpoints
+            response = sagemaker_client.list_endpoints()
+            
+            # Find endpoints with our prefix
+            matching_endpoints = [
+                ep['EndpointName'] for ep in response['Endpoints']
+                if ep['EndpointName'].startswith(endpoint_prefix)
+            ]
+            
+            # Delete each matching endpoint
+            for endpoint_name in matching_endpoints:
+                print(f"Deleting existing endpoint: {endpoint_name}")
+                self._delete_endpoint(endpoint_name)
+                
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
     
     def _delete_endpoint(self, endpoint_name):
         """Delete existing endpoint and its configuration"""
