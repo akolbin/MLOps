@@ -94,6 +94,7 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_version: 1.13.1
+        terraform_wrapper: false
     
     - name: Terraform Init
       run: terraform init -backend-config="bucket=akolbin-mlops-tfstate"
