@@ -10,6 +10,12 @@ env:
   AWS_REGION: us-east-1
   PYTHON_VERSION: '3.9'
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
