@@ -58,13 +58,25 @@ class ModelDeployer:
         sagemaker_client = boto3.client('sagemaker')
         
         try:
+            # Get endpoint config name before deleting endpoint
+            endpoint_info = sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
+            config_name = endpoint_info['EndpointConfigName']
+            
             # Delete endpoint
             sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
             print(f"Deleted endpoint: {endpoint_name}")
             
-            # Wait for deletion to complete
+            # Wait for endpoint deletion to complete
             waiter = sagemaker_client.get_waiter('endpoint_deleted')
             waiter.wait(EndpointName=endpoint_name)
+            
+            # Delete endpoint configuration
+            sagemaker_client.delete_endpoint_config(EndpointConfigName=config_name)
+            print(f"Deleted endpoint config: {config_name}")
+            
+            # Small wait to ensure cleanup is complete
+            import time
+            time.sleep(5)
             
         except Exception as e:
             print(f"Error deleting endpoint: {e}")
