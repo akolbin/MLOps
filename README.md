@@ -18,12 +18,6 @@ A cost-effective MLOps pipeline demonstrating end-to-end machine learning lifecy
                        └──────────────────┘    └─────────────────┘
 ```
 
-## Cost Estimate (Monthly)
-- S3 Storage: ~$1-2
-- SageMaker Serverless: ~$1-3 (demo usage)
-- CloudWatch: ~$1-2
-- **Total: <$10/month**
-
 ## Quick Start
 
 1. **Setup Infrastructure**
