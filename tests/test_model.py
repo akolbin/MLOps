@@ -1,7 +1,12 @@
 import pytest
 import pandas as pd
 import numpy as np
+import sys
+import os
 from sklearn.ensemble import RandomForestClassifier
+
+# Add project root to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.data.generate_data import generate_synthetic_data
 
 def test_data_generation():
