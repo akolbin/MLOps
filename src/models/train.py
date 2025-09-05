@@ -46,9 +46,14 @@ class ModelTrainer:
         # Save model
         joblib.dump(model, '/tmp/model.pkl')
         
-        # Upload model to S3
-        s3.upload_file('/tmp/model.pkl', self.bucket_name, 'models/model.pkl')
-        print(f"Model uploaded to s3://{self.bucket_name}/models/model.pkl")
+        # Create model archive for SageMaker
+        import tarfile
+        with tarfile.open('/tmp/model.tar.gz', 'w:gz') as tar:
+            tar.add('/tmp/model.pkl', arcname='model.pkl')
+        
+        # Upload model archive to S3
+        s3.upload_file('/tmp/model.tar.gz', self.bucket_name, 'models/model.tar.gz')
+        print(f"Model uploaded to s3://{self.bucket_name}/models/model.tar.gz")
         
         return accuracy
     

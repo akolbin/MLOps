@@ -14,7 +14,7 @@ class ModelDeployer:
         """Deploy model using SageMaker Serverless Inference"""
         
         if not model_s3_path:
-            model_s3_path = f's3://{self.bucket_name}/models/model.pkl'
+            model_s3_path = f's3://{self.bucket_name}/models/model.tar.gz'
         
         # Create SKLearn model
         sklearn_model = SKLearnModel(
