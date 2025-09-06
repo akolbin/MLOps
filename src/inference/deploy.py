@@ -103,9 +103,13 @@ class ModelDeployer:
         sagemaker_client = boto3.client('sagemaker')
         
         try:
-            # Get endpoint config name before deleting endpoint
+            # Get endpoint config name and model names before deleting endpoint
             endpoint_info = sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
             config_name = endpoint_info['EndpointConfigName']
+            
+            # Get model names from endpoint config
+            config_info = sagemaker_client.describe_endpoint_config(EndpointConfigName=config_name)
+            model_names = [variant['ModelName'] for variant in config_info['ProductionVariants']]
             
             # Delete endpoint
             sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
@@ -118,6 +122,14 @@ class ModelDeployer:
             # Delete endpoint configuration
             sagemaker_client.delete_endpoint_config(EndpointConfigName=config_name)
             print(f"Deleted endpoint config: {config_name}")
+            
+            # Delete associated models
+            for model_name in model_names:
+                try:
+                    sagemaker_client.delete_model(ModelName=model_name)
+                    print(f"Deleted model: {model_name}")
+                except Exception as e:
+                    print(f"Error deleting model {model_name}: {e}")
             
             # Small wait to ensure cleanup is complete
             import time
