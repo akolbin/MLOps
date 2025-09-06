@@ -44,7 +44,10 @@ class ModelTrainer:
         print(classification_report(y_test, y_pred))
         
         # Save model with maximum compatibility pickle protocol
-        joblib.dump(model, '/tmp/model.pkl', protocol=2)
+        import pickle
+        # Force joblib to use pickle protocol 2
+        with open('/tmp/model.pkl', 'wb') as f:
+            pickle.dump(model, f, protocol=2)
         
         # Create model archive for SageMaker
         import tarfile
