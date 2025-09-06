@@ -39,13 +39,9 @@ class ModelDeployer:
             py_version='py3'
         )
         
-        serverless_config = ServerlessInferenceConfig(
-            memory_size_in_mb=2048,
-            max_concurrency=1
-        )
-        
         predictor = sklearn_model.deploy(
-            serverless_inference_config=serverless_config,
+            initial_instance_count=1,
+            instance_type='ml.t2.medium',
             endpoint_name=endpoint_name
         )
         

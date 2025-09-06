@@ -43,8 +43,8 @@ class ModelTrainer:
         print("\nClassification Report:")
         print(classification_report(y_test, y_pred))
         
-        # Save model
-        joblib.dump(model, '/tmp/model.pkl')
+        # Save model with compatible pickle protocol
+        joblib.dump(model, '/tmp/model.pkl', protocol=4)
         
         # Create model archive for SageMaker
         import tarfile
