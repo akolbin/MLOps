@@ -49,7 +49,7 @@ class ModelDeployer:
         return predictor
     
     def _cleanup_existing_endpoints(self, endpoint_prefix):
-        """Delete all endpoints matching the prefix"""
+        """Delete all endpoints and models matching the prefix"""
         sagemaker_client = boto3.client('sagemaker')
         
         try:
@@ -66,9 +66,37 @@ class ModelDeployer:
             for endpoint_name in matching_endpoints:
                 print(f"Deleting existing endpoint: {endpoint_name}")
                 self._delete_endpoint(endpoint_name)
+            
+            # Also cleanup old models
+            self._cleanup_old_models(endpoint_prefix)
                 
         except Exception as e:
             print(f"Error during cleanup: {e}")
+    
+    def _cleanup_old_models(self, model_prefix):
+        """Delete old SageMaker models"""
+        sagemaker_client = boto3.client('sagemaker')
+        
+        try:
+            # List all models
+            response = sagemaker_client.list_models()
+            
+            # Find models with our prefix
+            matching_models = [
+                model['ModelName'] for model in response['Models']
+                if model['ModelName'].startswith(model_prefix)
+            ]
+            
+            # Delete each matching model
+            for model_name in matching_models:
+                try:
+                    sagemaker_client.delete_model(ModelName=model_name)
+                    print(f"Deleted model: {model_name}")
+                except Exception as e:
+                    print(f"Error deleting model {model_name}: {e}")
+                    
+        except Exception as e:
+            print(f"Error during model cleanup: {e}")
     
     def _delete_endpoint(self, endpoint_name):
         """Delete existing endpoint and its configuration"""
