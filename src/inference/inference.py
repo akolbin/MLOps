@@ -28,7 +28,5 @@ def predict_fn(input_data, model):
 
 def output_fn(prediction, accept):
     """Format output"""
-    if accept == 'application/json':
-        return prediction, 'application/json'
-    else:
-        return str(prediction), 'text/plain'
+    import json
+    return json.dumps(prediction), 'application/json'
