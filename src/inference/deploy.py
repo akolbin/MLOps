@@ -16,7 +16,7 @@ class ModelDeployer:
         if not model_s3_path:
             model_s3_path = f's3://{self.bucket_name}/models/model.tar.gz'
         
-        endpoint_name = 'mlops-showcase-endpoint'
+        endpoint_name = 'mlops-endpoint'
         sagemaker_client = boto3.client('sagemaker')
         
         # Check if endpoint exists
