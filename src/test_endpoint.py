@@ -11,7 +11,7 @@ def test_model_endpoint():
     try:
         # List endpoints to find ours
         response = sagemaker_client.list_endpoints()
-        endpoint_name = "mlops-showcase-endpoint-5ccdd2f9"
+        endpoint_name = "mlops-showcase-endpoint-bb145e57"
         
         # for endpoint in response['Endpoints']:
         #     if endpoint['EndpointName'].startswith('mlops-showcase-endpoint'):
