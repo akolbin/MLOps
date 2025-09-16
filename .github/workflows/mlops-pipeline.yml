@@ -226,7 +226,7 @@ jobs:
         echo "endpoint_name=mlops-endpoint" >> $GITHUB_OUTPUT
       env:
         S3_BUCKET_NAME: ${{ needs.base-infrastructure.outputs.s3_bucket_name }}
-        SAGEMAKER_ROLE_ARN: ${{ needs.base-infrastructure.outputs.sagemaker_role_arn}
+        SAGEMAKER_ROLE_ARN: ${{ needs.base-infrastructure.outputs.sagemaker_role_arn }}
 
   # Step 4: Test Model Endpoint
   test-endpoint:
