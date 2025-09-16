@@ -207,9 +207,10 @@ The pipeline follows the **correct logical order**:
 - Package and upload model artifacts to S3
 
 ### **3. Deploy Endpoint** 🚀
+- Check model artifacts exist in S3
 - Create SageMaker model (references trained artifacts)
-- Create endpoint configuration with monitoring
-- Deploy serverless SageMaker endpoint
+- Create endpoint configuration with serverless inference
+- Deploy SageMaker endpoint with data capture enabled
 
 ### **4. Test & Monitor** 🧪📊
 - Wait for endpoint to be ready
