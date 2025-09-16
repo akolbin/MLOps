@@ -1,81 +1,184 @@
 import os
 import boto3
-import sagemaker
-from sagemaker.sklearn.model import SKLearnModel
-from sagemaker.serverless import ServerlessInferenceConfig
+import time
+from datetime import datetime
 
 class ModelDeployer:
     def __init__(self, bucket_name, role_arn):
         self.bucket_name = bucket_name
         self.role_arn = role_arn
-        self.sagemaker_session = sagemaker.Session()
+        self.sagemaker_client = boto3.client('sagemaker')
         
     def deploy_serverless(self, model_s3_path=None):
-        """Deploy model using SageMaker Serverless Inference"""
+        """Deploy model using SageMaker Serverless Inference with boto3 client"""
         
         if not model_s3_path:
             model_s3_path = f's3://{self.bucket_name}/models/model.tar.gz'
         
         endpoint_name = 'mlops-endpoint'
-        sagemaker_client = boto3.client('sagemaker')
         
         # Check if endpoint exists
         try:
-            sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
+            self.sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
             print(f"Endpoint {endpoint_name} exists, updating with new model...")
             return self._update_endpoint(model_s3_path, endpoint_name)
-        except sagemaker_client.exceptions.ClientError:
-            print(f"Creating new serverless endpoint {endpoint_name}...")
-            return self._create_endpoint(model_s3_path, endpoint_name)
+        except self.sagemaker_client.exceptions.ClientError as e:
+            if 'does not exist' in str(e):
+                print(f"Creating new serverless endpoint {endpoint_name}...")
+                return self._create_endpoint(model_s3_path, endpoint_name)
+            else:
+                raise e
     
     def _create_endpoint(self, model_s3_path, endpoint_name):
-        """Create new serverless endpoint"""
-        sklearn_model = SKLearnModel(
-            model_data=model_s3_path,
-            role=self.role_arn,
-            entry_point='inference.py',
-            source_dir='src/inference',
-            framework_version='1.0-1',
-            py_version='py3'
+        """Create new serverless endpoint using boto3 client"""
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        model_name = f'mlops-model-{timestamp}'
+        config_name = f'mlops-endpoint-config-{timestamp}'
+        
+        # 1. Create SageMaker Model
+        print(f"Creating SageMaker model: {model_name}")
+        
+        # Use the sklearn container image
+        sklearn_image_uri = "246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3"
+        
+        self.sagemaker_client.create_model(
+            ModelName=model_name,
+            PrimaryContainer={
+                'Image': sklearn_image_uri,
+                'ModelDataUrl': model_s3_path,
+                'Environment': {
+                    'SAGEMAKER_PROGRAM': 'inference.py',
+                    'SAGEMAKER_SUBMIT_DIRECTORY': '/opt/ml/code'
+                }
+            },
+            ExecutionRoleArn=self.role_arn,
+            Tags=[
+                {'Key': 'Project', 'Value': 'mlops-showcase'},
+                {'Key': 'ManagedBy', 'Value': 'python-deployment'}
+            ]
         )
         
-        serverless_config = ServerlessInferenceConfig(
-            memory_size_in_mb=2048,
-            max_concurrency=1
+        # 2. Create Endpoint Configuration with Serverless
+        print(f"Creating endpoint configuration: {config_name}")
+        
+        self.sagemaker_client.create_endpoint_config(
+            EndpointConfigName=config_name,
+            ProductionVariants=[
+                {
+                    'VariantName': 'primary',
+                    'ModelName': model_name,
+                    'ServerlessConfig': {
+                        'MemorySizeInMB': 2048,
+                        'MaxConcurrency': 1
+                    }
+                }
+            ],
+            DataCaptureConfig={
+                'EnableCapture': True,
+                'InitialSamplingPercentage': 100,
+                'DestinationS3Uri': f's3://{self.bucket_name}/data-capture',
+                'CaptureOptions': [
+                    {'CaptureMode': 'Input'},
+                    {'CaptureMode': 'Output'}
+                ],
+                'CaptureContentTypeHeader': {
+                    'CsvContentTypes': ['text/csv'],
+                    'JsonContentTypes': ['application/json']
+                }
+            },
+            Tags=[
+                {'Key': 'Project', 'Value': 'mlops-showcase'},
+                {'Key': 'ManagedBy', 'Value': 'python-deployment'}
+            ]
         )
         
-        predictor = sklearn_model.deploy(
-            serverless_inference_config=serverless_config,
-            endpoint_name=endpoint_name
+        # 3. Create Endpoint
+        print(f"Creating endpoint: {endpoint_name}")
+        
+        self.sagemaker_client.create_endpoint(
+            EndpointName=endpoint_name,
+            EndpointConfigName=config_name,
+            Tags=[
+                {'Key': 'Project', 'Value': 'mlops-showcase'},
+                {'Key': 'ManagedBy', 'Value': 'python-deployment'}
+            ]
         )
         
-        print(f"Model deployed to serverless endpoint: {predictor.endpoint_name}")
-        return predictor
+        print(f"Endpoint creation initiated. Endpoint: {endpoint_name}")
+        return endpoint_name
     
     def _update_endpoint(self, model_s3_path, endpoint_name):
-        """Update existing serverless endpoint with new model"""
-        sklearn_model = SKLearnModel(
-            model_data=model_s3_path,
-            role=self.role_arn,
-            entry_point='inference.py',
-            source_dir='src/inference',
-            framework_version='1.0-1',
-            py_version='py3'
+        """Update existing endpoint with new model"""
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        model_name = f'mlops-model-{timestamp}'
+        config_name = f'mlops-endpoint-config-{timestamp}'
+        
+        # Create new model
+        print(f"Creating new model for update: {model_name}")
+        
+        sklearn_image_uri = "246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3"
+        
+        self.sagemaker_client.create_model(
+            ModelName=model_name,
+            PrimaryContainer={
+                'Image': sklearn_image_uri,
+                'ModelDataUrl': model_s3_path,
+                'Environment': {
+                    'SAGEMAKER_PROGRAM': 'inference.py',
+                    'SAGEMAKER_SUBMIT_DIRECTORY': '/opt/ml/code'
+                }
+            },
+            ExecutionRoleArn=self.role_arn,
+            Tags=[
+                {'Key': 'Project', 'Value': 'mlops-showcase'},
+                {'Key': 'ManagedBy', 'Value': 'python-deployment'}
+            ]
         )
         
-        serverless_config = ServerlessInferenceConfig(
-            memory_size_in_mb=2048,
-            max_concurrency=1
+        # Create new endpoint configuration
+        print(f"Creating new endpoint configuration: {config_name}")
+        
+        self.sagemaker_client.create_endpoint_config(
+            EndpointConfigName=config_name,
+            ProductionVariants=[
+                {
+                    'VariantName': 'primary',
+                    'ModelName': model_name,
+                    'ServerlessConfig': {
+                        'MemorySizeInMB': 2048,
+                        'MaxConcurrency': 1
+                    }
+                }
+            ],
+            DataCaptureConfig={
+                'EnableCapture': True,
+                'InitialSamplingPercentage': 100,
+                'DestinationS3Uri': f's3://{self.bucket_name}/data-capture',
+                'CaptureOptions': [
+                    {'CaptureMode': 'Input'},
+                    {'CaptureMode': 'Output'}
+                ],
+                'CaptureContentTypeHeader': {
+                    'CsvContentTypes': ['text/csv'],
+                    'JsonContentTypes': ['application/json']
+                }
+            },
+            Tags=[
+                {'Key': 'Project', 'Value': 'mlops-showcase'},
+                {'Key': 'ManagedBy', 'Value': 'python-deployment'}
+            ]
         )
         
-        predictor = sklearn_model.deploy(
-            serverless_inference_config=serverless_config,
-            endpoint_name=endpoint_name,
-            update_endpoint=True
+        # Update endpoint
+        print(f"Updating endpoint: {endpoint_name}")
+        
+        self.sagemaker_client.update_endpoint(
+            EndpointName=endpoint_name,
+            EndpointConfigName=config_name
         )
         
-        print(f"Model updated on serverless endpoint: {predictor.endpoint_name}")
-        return predictor
+        print(f"Endpoint update initiated. Endpoint: {endpoint_name}")
+        return endpoint_name
     
     def _cleanup_existing_endpoints(self, endpoint_prefix):
         """Delete all endpoints and models matching the prefix"""
@@ -185,12 +288,22 @@ if __name__ == "__main__":
     role_arn = os.environ.get('SAGEMAKER_ROLE_ARN')
     
     if not bucket_name or not role_arn:
-        print("Please set S3_BUCKET_NAME and SAGEMAKER_ROLE_ARN environment variables")
+        print("❌ Please set S3_BUCKET_NAME and SAGEMAKER_ROLE_ARN environment variables")
         exit(1)
+    
+    print(f"🚀 Starting deployment...")
+    print(f"   S3 Bucket: {bucket_name}")
+    print(f"   IAM Role: {role_arn}")
     
     deployer = ModelDeployer(bucket_name, role_arn)
     
-    print("Deploying model to serverless endpoint...")
-    predictor = deployer.deploy_serverless()
-    
-    print(f"Deployment completed. Endpoint: {predictor.endpoint_name}")
+    try:
+        print("📦 Deploying model to serverless endpoint...")
+        endpoint_name = deployer.deploy_serverless()
+        print(f"✅ Deployment initiated successfully!")
+        print(f"   Endpoint: {endpoint_name}")
+        print(f"   Note: Endpoint will take a few minutes to become InService")
+        
+    except Exception as e:
+        print(f"❌ Deployment failed: {e}")
+        exit(1)
