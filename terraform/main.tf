@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 
   backend "s3" {
@@ -18,82 +22,64 @@ provider "aws" {
   region = var.aws_region
 }
 
-# S3 bucket for data and models
-resource "aws_s3_bucket" "mlops_bucket" {
-  bucket = "${var.project_name}-${random_string.suffix.result}"
-}
-
-resource "aws_s3_bucket_versioning" "mlops_bucket_versioning" {
-  bucket = aws_s3_bucket.mlops_bucket.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "mlops_bucket_encryption" {
-  bucket = aws_s3_bucket.mlops_bucket.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
+# Random suffix for unique resource names
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false
 }
 
-# IAM role for SageMaker
-resource "aws_iam_role" "sagemaker_execution_role" {
-  name = "${var.project_name}-sagemaker-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "sagemaker.amazonaws.com"
-        }
-      }
-    ]
-  })
+# Local values for common tags
+locals {
+  common_tags = {
+    Project   = var.project_name
+    ManagedBy = "terraform"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "sagemaker_execution_role_policy" {
-  role       = aws_iam_role.sagemaker_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+# S3 Module
+module "s3" {
+  source = "./modules/s3"
+
+  project_name = var.project_name
+  suffix       = random_string.suffix.result
+  tags         = local.common_tags
 }
 
-resource "aws_iam_role_policy" "sagemaker_s3_policy" {
-  name = "${var.project_name}-sagemaker-s3-policy"
-  role = aws_iam_role.sagemaker_execution_role.id
+# IAM Module
+module "iam" {
+  source = "./modules/iam"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.mlops_bucket.arn,
-          "${aws_s3_bucket.mlops_bucket.arn}/*"
-        ]
-      }
-    ]
-  })
+  project_name  = var.project_name
+  s3_bucket_arn = module.s3.bucket_arn
+  tags          = local.common_tags
 }
 
-# CloudWatch Log Group
-resource "aws_cloudwatch_log_group" "mlops_logs" {
-  name              = "/aws/sagemaker/${var.project_name}"
-  retention_in_days = 7
+# SageMaker Module
+module "sagemaker" {
+  source = "./modules/sagemaker"
+
+  project_name                     = var.project_name
+  suffix                           = random_string.suffix.result
+  execution_role_arn               = module.iam.sagemaker_execution_role_arn
+  s3_bucket_name                   = module.s3.bucket_name
+  sklearn_image_uri                = var.sklearn_image_uri
+  serverless_memory_size           = var.serverless_memory_size
+  serverless_max_concurrency       = var.serverless_max_concurrency
+  data_capture_sampling_percentage = var.data_capture_sampling_percentage
+  tags                             = local.common_tags
+}
+
+# Monitoring Module
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  project_name         = var.project_name
+  aws_region           = var.aws_region
+  endpoint_name        = module.sagemaker.endpoint_name
+  latency_threshold_ms = var.latency_threshold_ms
+  error_rate_threshold = var.error_rate_threshold
+  alert_email          = var.alert_email
+  drift_check_schedule = var.drift_check_schedule
+  tags                 = local.common_tags
 }
