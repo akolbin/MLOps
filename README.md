@@ -190,6 +190,39 @@ aws s3 ls s3://your-bucket-name/data-capture/ --recursive
   5. **Summary** - Comprehensive pipeline results
 - **Outputs**: Complete deployment summary with all resource details
 
+## 🔄 **MLOps Pipeline Order of Operations**
+
+The pipeline follows the **correct logical order**:
+
+### **1. Base Infrastructure** 🏗️
+- Create S3 bucket for data and models
+- Set up IAM roles and policies  
+- Create CloudWatch log groups
+- Set up model registry (Model Package Group)
+
+### **2. Train Model** 🤖
+- Generate synthetic training data
+- Upload data to S3
+- Train machine learning model
+- Package and upload model artifacts to S3
+
+### **3. Deploy Endpoint** 🚀
+- Create SageMaker model (references trained artifacts)
+- Create endpoint configuration with monitoring
+- Deploy serverless SageMaker endpoint
+
+### **4. Test & Monitor** 🧪📊
+- Wait for endpoint to be ready
+- Test model inference
+- Run health checks and performance analysis
+- Generate monitoring reports
+
+This order ensures that:
+- ✅ Infrastructure exists before we need it
+- ✅ Model is trained before we try to deploy it  
+- ✅ Endpoint exists before we test it
+- ✅ Everything is ready before monitoring
+
 ## Personal Project Setup
 
 Since this is configured as a personal project, it uses simplified settings:
