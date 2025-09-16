@@ -1,16 +1,19 @@
-.PHONY: help setup test deploy clean
+.PHONY: help setup test clean monitor test-endpoint validate-terraform
 
 help:
 	@echo "MLOps Showcase Project"
 	@echo "====================="
 	@echo "Available commands:"
-	@echo "  setup     - Initialize project and install dependencies"
-	@echo "  test      - Run unit tests"
-	@echo "  deploy    - Deploy infrastructure and model"
-	@echo "  clean     - Clean up resources"
-	@echo "  data      - Generate and upload synthetic data"
-	@echo "  train     - Train the model"
-	@echo "  inference - Deploy model for inference"
+	@echo "  setup           - Initialize project and install dependencies"
+	@echo "  test            - Run unit tests"
+	@echo "  validate-terraform - Validate Terraform configuration"
+	@echo "  test-endpoint   - Test the deployed endpoint (requires deployed infrastructure)"
+	@echo "  monitor         - Run MLOps monitoring analysis (requires deployed infrastructure)"
+	@echo "  clean           - Clean up resources (destroys Terraform infrastructure)"
+	@echo ""
+	@echo "Deployment is handled via GitHub Actions:"
+	@echo "  - Push to main branch triggers infrastructure deployment"
+	@echo "  - Use workflow_dispatch for manual deployments with optional email alerts"
 
 setup:
 	@echo "Setting up project..."
@@ -20,30 +23,41 @@ test:
 	@echo "Running tests..."
 	pytest tests/ -v --cov=src
 
-deploy:
-	@echo "Deploying infrastructure..."
-	cd terraform && terraform apply -auto-approve
-	@echo "Setting environment variables..."
-	$(eval S3_BUCKET := $(shell cd terraform && terraform output -raw s3_bucket_name))
-	$(eval ROLE_ARN := $(shell cd terraform && terraform output -raw sagemaker_execution_role_arn))
-	@echo "Generating data..."
-	S3_BUCKET_NAME=$(S3_BUCKET) python src/data/generate_data.py
-	@echo "Training model..."
-	S3_BUCKET_NAME=$(S3_BUCKET) SAGEMAKER_ROLE_ARN=$(ROLE_ARN) python src/models/train.py
+validate-terraform:
+	@echo "Validating Terraform configuration..."
+	cd terraform && terraform init -backend=false
+	cd terraform && terraform validate
+	@echo "✅ Terraform configuration is valid"
 
-data:
-	@echo "Generating synthetic data..."
-	python src/data/generate_data.py
+test-endpoint:
+	@echo "Testing SageMaker endpoint..."
+	@if [ -z "$$SAGEMAKER_ENDPOINT_NAME" ]; then \
+		echo "Getting endpoint name from Terraform outputs..."; \
+		export SAGEMAKER_ENDPOINT_NAME=$$(cd terraform && terraform output -raw sagemaker_endpoint_name 2>/dev/null || echo "mlops-showcase-endpoint"); \
+	fi; \
+	python src/test_endpoint.py --with-monitoring
 
-train:
-	@echo "Training model..."
-	python src/models/train.py
-
-inference:
-	@echo "Deploying model for inference..."
-	python src/inference/deploy.py
+monitor:
+	@echo "Running MLOps monitoring analysis..."
+	@if [ -z "$$S3_BUCKET_NAME" ]; then \
+		echo "Getting configuration from Terraform outputs..."; \
+		export S3_BUCKET_NAME=$$(cd terraform && terraform output -raw s3_bucket_name 2>/dev/null || echo ""); \
+		export SAGEMAKER_ENDPOINT_NAME=$$(cd terraform && terraform output -raw sagemaker_endpoint_name 2>/dev/null || echo ""); \
+		export SNS_TOPIC_ARN=$$(cd terraform && terraform output -raw sns_topic_arn 2>/dev/null || echo ""); \
+		if [ -z "$$S3_BUCKET_NAME" ]; then \
+			echo "❌ No Terraform outputs found. Please deploy infrastructure first via GitHub Actions."; \
+			exit 1; \
+		fi; \
+	fi; \
+	python src/monitoring/mlops_monitor.py
 
 clean:
-	@echo "Cleaning up resources..."
-	cd terraform && terraform destroy -auto-approve
-	@echo "Cleanup complete!"
+	@echo "⚠️  This will destroy all AWS resources created by Terraform!"
+	@echo "This action should typically be done via GitHub Actions for production environments."
+	@read -p "Are you sure you want to continue? (y/N): " confirm; \
+	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+		cd terraform && terraform destroy -auto-approve; \
+		echo "✅ Cleanup complete!"; \
+	else \
+		echo "Cleanup cancelled."; \
+	fi
