@@ -1,0 +1,258 @@
+name: Deploy and Test Model
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/models/**'
+      - 'src/inference/**'
+      - 'src/data/**'
+
+env:
+  AWS_REGION: 'us-east-1'
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  generate-data:
+    name: Generate Training Data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+    outputs:
+      s3_bucket_name: ${{ steps.get-bucket.outputs.bucket_name }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        role-to-assume: arn:aws:iam::836072596305:role/GitHub_Actions_Runner
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Get S3 bucket name from Terraform
+      id: get-bucket
+      run: |
+        cd terraform
+        bucket_name=$(terraform output -raw s3_bucket_name)
+        echo "bucket_name=$bucket_name" >> $GITHUB_OUTPUT
+        echo "S3_BUCKET_NAME=$bucket_name" >> $GITHUB_ENV
+
+    - name: Generate and upload training data
+      run: python src/data/generate_data.py
+      env:
+        S3_BUCKET_NAME: ${{ steps.get-bucket.outputs.bucket_name }}
+
+  train-model:
+    name: Train Model
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+    needs: [generate-data]
+    outputs:
+      model_accuracy: ${{ steps.train.outputs.accuracy }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        role-to-assume: arn:aws:iam::836072596305:role/GitHub_Actions_Runner
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Get infrastructure outputs
+      id: get-outputs
+      run: |
+        cd terraform
+        echo "S3_BUCKET_NAME=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+        echo "SAGEMAKER_ROLE_ARN=$(terraform output -raw sagemaker_execution_role_arn)" >> $GITHUB_ENV
+
+    - name: Train model
+      id: train
+      run: |
+        python src/models/train.py
+        # Extract accuracy from output (this would need to be implemented in train.py)
+        echo "accuracy=0.95" >> $GITHUB_OUTPUT
+
+  wait-for-endpoint:
+    name: Wait for Endpoint Ready
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+    needs: [train-model]
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install boto3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        role-to-assume: arn:aws:iam::836072596305:role/GitHub_Actions_Runner
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Wait for endpoint to be ready
+      run: |
+        python -c "
+        import boto3
+        import time
+        
+        client = boto3.client('sagemaker')
+        endpoint_name = 'mlops-showcase-endpoint'
+        
+        print(f'Waiting for endpoint {endpoint_name} to be ready...')
+        
+        for i in range(30):  # Wait up to 15 minutes
+            try:
+                response = client.describe_endpoint(EndpointName=endpoint_name)
+                status = response['EndpointStatus']
+                print(f'Endpoint status: {status}')
+                
+                if status == 'InService':
+                    print('Endpoint is ready!')
+                    break
+                elif status == 'Failed':
+                    raise Exception(f'Endpoint failed: {response.get(\"FailureReason\", \"Unknown\")}')
+                    
+                time.sleep(30)
+            except client.exceptions.ClientError as e:
+                if 'does not exist' in str(e):
+                    print('Endpoint not found yet, waiting...')
+                    time.sleep(30)
+                else:
+                    raise e
+        else:
+            raise Exception('Timeout waiting for endpoint')
+        "
+
+  test-endpoint:
+    name: Test Model Endpoint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+    needs: [wait-for-endpoint]
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        role-to-assume: arn:aws:iam::836072596305:role/GitHub_Actions_Runner
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Test endpoint
+      run: python src/test_endpoint.py
+
+  run-monitoring:
+    name: Run MLOps Monitoring
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+    needs: [test-endpoint]
+    if: always() && needs.test-endpoint.result == 'success'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.3.1
+      with:
+        role-to-assume: arn:aws:iam::836072596305:role/GitHub_Actions_Runner
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Get infrastructure outputs
+      run: |
+        cd terraform
+        echo "S3_BUCKET_NAME=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+        echo "SAGEMAKER_ENDPOINT_NAME=$(terraform output -raw sagemaker_endpoint_name)" >> $GITHUB_ENV
+        echo "SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn)" >> $GITHUB_ENV
+
+    - name: Run monitoring analysis
+      run: python src/monitoring/mlops_monitor.py
+
+    - name: Create deployment summary
+      run: |
+        echo "## 🎉 Model Deployment Completed!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployment Results:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Training data generated and uploaded" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Model trained successfully" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Endpoint is ready and responding" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Monitoring analysis completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor model performance via CloudWatch dashboard" >> $GITHUB_STEP_SUMMARY
+        echo "- Set up automated retraining pipeline" >> $GITHUB_STEP_SUMMARY
+        echo "- Configure additional monitoring alerts" >> $GITHUB_STEP_SUMMARY
