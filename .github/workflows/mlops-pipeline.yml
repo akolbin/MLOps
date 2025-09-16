@@ -227,6 +227,7 @@ jobs:
       env:
         S3_BUCKET_NAME: ${{ needs.base-infrastructure.outputs.s3_bucket_name }}
         SAGEMAKER_ROLE_ARN: ${{ needs.base-infrastructure.outputs.sagemaker_role_arn }}
+        AWS_REGION: ${{ env.AWS_REGION }}
 
   # Step 4: Test Model Endpoint
   test-endpoint:

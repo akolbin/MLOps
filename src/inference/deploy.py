@@ -2,12 +2,14 @@ import os
 import boto3
 import time
 from datetime import datetime
+from sagemaker import image_uris
 
 class ModelDeployer:
-    def __init__(self, bucket_name, role_arn):
+    def __init__(self, bucket_name, role_arn, region_name='us-east-1'):
         self.bucket_name = bucket_name
         self.role_arn = role_arn
-        self.sagemaker_client = boto3.client('sagemaker')
+        self.region_name = region_name
+        self.sagemaker_client = boto3.client('sagemaker', region_name=region_name)
         
     def deploy_serverless(self, model_s3_path=None):
         """Deploy model using SageMaker Serverless Inference with boto3 client"""
@@ -38,8 +40,15 @@ class ModelDeployer:
         # 1. Create SageMaker Model
         print(f"Creating SageMaker model: {model_name}")
         
-        # Use the sklearn container image
-        sklearn_image_uri = "246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3"
+        # Get the correct SageMaker-managed sklearn container image for the region
+        sklearn_image_uri = image_uris.retrieve(
+            framework="sklearn",
+            region=self.region_name,
+            version="1.2-1",
+            py_version="py3",
+            instance_type="ml.m5.large"  # Required parameter, but not used for serverless
+        )
+        print(f"Using container image: {sklearn_image_uri}")
         
         self.sagemaker_client.create_model(
             ModelName=model_name,
@@ -116,7 +125,15 @@ class ModelDeployer:
         # Create new model
         print(f"Creating new model for update: {model_name}")
         
-        sklearn_image_uri = "246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3"
+        # Get the correct SageMaker-managed sklearn container image for the region
+        sklearn_image_uri = image_uris.retrieve(
+            framework="sklearn",
+            region=self.region_name,
+            version="1.2-1",
+            py_version="py3",
+            instance_type="ml.m5.large"  # Required parameter, but not used for serverless
+        )
+        print(f"Using container image: {sklearn_image_uri}")
         
         self.sagemaker_client.create_model(
             ModelName=model_name,
@@ -286,6 +303,7 @@ class ModelDeployer:
 if __name__ == "__main__":
     bucket_name = os.environ.get('S3_BUCKET_NAME')
     role_arn = os.environ.get('SAGEMAKER_ROLE_ARN')
+    region_name = os.environ.get('AWS_REGION', 'us-east-1')
     
     if not bucket_name or not role_arn:
         print("❌ Please set S3_BUCKET_NAME and SAGEMAKER_ROLE_ARN environment variables")
@@ -294,8 +312,9 @@ if __name__ == "__main__":
     print(f"🚀 Starting deployment...")
     print(f"   S3 Bucket: {bucket_name}")
     print(f"   IAM Role: {role_arn}")
+    print(f"   Region: {region_name}")
     
-    deployer = ModelDeployer(bucket_name, role_arn)
+    deployer = ModelDeployer(bucket_name, role_arn, region_name)
     
     try:
         print("📦 Deploying model to serverless endpoint...")
