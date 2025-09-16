@@ -12,8 +12,9 @@ help:
 	@echo "  clean           - Clean up resources (destroys Terraform infrastructure)"
 	@echo ""
 	@echo "Deployment is handled via GitHub Actions:"
-	@echo "  - Push to main branch triggers infrastructure deployment"
-	@echo "  - Use workflow_dispatch for manual deployments with optional email alerts"
+	@echo "  - Push to main branch triggers complete MLOps pipeline"
+	@echo "  - Pull requests trigger infrastructure planning only"
+	@echo "  - Use workflow_dispatch for manual runs with optional settings"
 
 setup:
 	@echo "Setting up project..."

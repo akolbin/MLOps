@@ -34,16 +34,13 @@ A comprehensive MLOps pipeline demonstrating end-to-end machine learning lifecyc
    - IAM role `GitHub_Actions_Runner` with appropriate permissions
    - Trust policy allowing your GitHub repository
 
-2. **Deploy Infrastructure**
-   - Push changes to `main` branch, or
-   - Use GitHub Actions "Deploy MLOps Infrastructure" workflow manually
-   - Optionally provide alert email during manual dispatch
+2. **Deploy Complete MLOps Pipeline**
+   - Push changes to `main` branch (full pipeline), or
+   - Create Pull Request (infrastructure planning only), or
+   - Use GitHub Actions "MLOps Pipeline" workflow manually
+   - Optionally provide alert email and skip infrastructure if needed
 
-3. **Deploy Model**
-   - Use GitHub Actions "Deploy and Test Model" workflow, or
-   - Push changes to model/inference code on `main` branch
-
-4. **Local Testing** (after deployment)
+3. **Local Testing** (after deployment)
    ```bash
    make test-endpoint  # Test the deployed endpoint
    make monitor        # Run monitoring analysis
@@ -181,17 +178,17 @@ make validate-terraform
 aws s3 ls s3://your-bucket-name/data-capture/ --recursive
 ```
 
-## GitHub Actions Workflows
+## GitHub Actions Pipeline
 
-### Infrastructure Deployment
+### Single MLOps Pipeline
 - **Trigger**: Push to main, PR, or manual dispatch
-- **Actions**: Plan and apply Terraform configuration
-- **Outputs**: S3 bucket, endpoint name, dashboard URL
-
-### Model Deployment
-- **Trigger**: Model code changes or manual dispatch  
-- **Actions**: Generate data, train model, test endpoint, run monitoring
-- **Outputs**: Deployment summary with health status
+- **Stages**: 
+  1. **Infrastructure** - Deploy/update AWS resources with Terraform
+  2. **Model Training** - Generate data and train model
+  3. **Endpoint Testing** - Wait for endpoint and test inference
+  4. **Monitoring** - Run health checks and performance analysis
+  5. **Summary** - Comprehensive pipeline results
+- **Outputs**: Complete deployment summary with all resource details
 
 ## Personal Project Setup
 
