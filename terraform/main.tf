@@ -59,27 +59,12 @@ module "iam" {
 module "sagemaker" {
   source = "./modules/sagemaker"
 
-  project_name                     = var.project_name
-  suffix                           = random_string.suffix.result
-  execution_role_arn               = module.iam.sagemaker_execution_role_arn
-  s3_bucket_name                   = module.s3.bucket_name
-  sklearn_image_uri                = var.sklearn_image_uri
-  serverless_memory_size           = var.serverless_memory_size
-  serverless_max_concurrency       = var.serverless_max_concurrency
-  data_capture_sampling_percentage = var.data_capture_sampling_percentage
-  tags                             = local.common_tags
+  project_name       = var.project_name
+  suffix            = random_string.suffix.result
+  execution_role_arn = module.iam.sagemaker_execution_role_arn
+  s3_bucket_name    = module.s3.bucket_name
+  tags              = local.common_tags
 }
 
-# Monitoring Module
-module "monitoring" {
-  source = "./modules/monitoring"
-
-  project_name         = var.project_name
-  aws_region           = var.aws_region
-  endpoint_name        = module.sagemaker.endpoint_name
-  latency_threshold_ms = var.latency_threshold_ms
-  error_rate_threshold = var.error_rate_threshold
-  alert_email          = var.alert_email
-  drift_check_schedule = var.drift_check_schedule
-  tags                 = local.common_tags
-}
+# Monitoring resources will be created by the deployment script
+# after the endpoint is deployed

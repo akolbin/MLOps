@@ -1,12 +1,4 @@
-output "endpoint_name" {
-  description = "Name of the SageMaker endpoint"
-  value       = aws_sagemaker_endpoint.mlops_endpoint.name
-}
-
-output "model_name" {
-  description = "Name of the SageMaker model"
-  value       = aws_sagemaker_model.mlops_model.name
-}
+# Endpoint and model outputs removed - these are created by deployment script
 
 output "model_package_group_name" {
   description = "Name of the SageMaker model package group"

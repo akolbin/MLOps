@@ -20,25 +20,7 @@ variable "s3_bucket_name" {
   type        = string
 }
 
-variable "sklearn_image_uri" {
-  description = "SageMaker SKLearn container image URI"
-  type        = string
-}
-
-variable "serverless_memory_size" {
-  description = "Memory size for serverless endpoint in MB"
-  type        = number
-}
-
-variable "serverless_max_concurrency" {
-  description = "Maximum concurrency for serverless endpoint"
-  type        = number
-}
-
-variable "data_capture_sampling_percentage" {
-  description = "Percentage of requests to capture for monitoring"
-  type        = number
-}
+# SageMaker deployment variables removed - handled by deployment script
 
 variable "tags" {
   description = "Common tags to apply to resources"
