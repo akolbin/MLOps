@@ -142,6 +142,7 @@ class ModelDeployer:
         
         # Create new endpoint configuration
         print(f"Creating new endpoint configuration: {config_name}")
+        print("Note: Data capture is not supported for serverless endpoints")
         
         self.sagemaker_client.create_endpoint_config(
             EndpointConfigName=config_name,
@@ -155,19 +156,6 @@ class ModelDeployer:
                     }
                 }
             ],
-            DataCaptureConfig={
-                'EnableCapture': True,
-                'InitialSamplingPercentage': 100,
-                'DestinationS3Uri': f's3://{self.bucket_name}/data-capture',
-                'CaptureOptions': [
-                    {'CaptureMode': 'Input'},
-                    {'CaptureMode': 'Output'}
-                ],
-                'CaptureContentTypeHeader': {
-                    'CsvContentTypes': ['text/csv'],
-                    'JsonContentTypes': ['application/json']
-                }
-            },
             Tags=[
                 {'Key': 'Project', 'Value': 'mlops-showcase'},
                 {'Key': 'ManagedBy', 'Value': 'python-deployment'}

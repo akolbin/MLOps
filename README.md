@@ -82,8 +82,8 @@ A comprehensive MLOps pipeline demonstrating end-to-end machine learning lifecyc
 
 ### Advanced Monitoring & Observability
 - ✅ **Real-time Monitoring** - CloudWatch metrics and alarms
-- ✅ **Data Capture** - Automatic input/output logging for analysis
-- ✅ **Drift Detection** - Basic statistical drift monitoring
+- ⚠️ **Data Capture** - Not supported with serverless endpoints
+- ✅ **Drift Detection** - Basic statistical drift monitoring (via custom logging)
 - ✅ **Alert System** - SNS notifications for model issues
 - ✅ **Performance Dashboard** - CloudWatch dashboard for visualization
 - ✅ **Health Reporting** - Automated health checks and reports
@@ -210,7 +210,7 @@ The pipeline follows the **correct logical order**:
 - Check model artifacts exist in S3
 - Create SageMaker model (references trained artifacts)
 - Create endpoint configuration with serverless inference
-- Deploy SageMaker endpoint with data capture enabled
+- Deploy SageMaker endpoint (data capture not supported for serverless)
 
 ### **4. Test & Monitor** 🧪📊
 - Wait for endpoint to be ready
